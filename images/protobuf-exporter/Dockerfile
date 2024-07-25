@@ -1,8 +1,7 @@
 FROM golang:alpine3.16 as artifact
 WORKDIR /src/
 COPY / /src/
-RUN apk add --no-cache git && \
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-extldflags "-static" -s -w' -o ./protobuf_exporter ./main.go
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-extldflags "-static" -s -w' -o ./protobuf_exporter ./main.go
 
 FROM scratch
 COPY --from=artifact /src/protobuf_exporter /protobuf_exporter
