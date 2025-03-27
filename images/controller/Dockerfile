@@ -15,12 +15,9 @@ FROM registry.k8s.io/ingress-nginx/controller:$TAG
 USER root
 
 # required packages to build lua and run luarocks
-RUN apk add --no-cache make gcc musl-dev
+RUN apk add --no-cache make gcc musl-dev unzip
 
-COPY lua/* /etc/nginx/lua/
-COPY patches /patches
-
-ARG LUA_ROCKS_VER="3.0.0"
+ARG LUA_ROCKS_VER="3.8.0"
 RUN cd /tmp \
  && wget https://luarocks.org/releases/luarocks-${LUA_ROCKS_VER}.tar.gz \
  && tar zxf luarocks-${LUA_ROCKS_VER}.tar.gz \
@@ -32,9 +29,11 @@ RUN cd /tmp \
  && rm -rf /tmp/* \
  && mkdir -p /tmp/nginx && chown www-data: /tmp/nginx \
  && luarocks install lua-protobuf 0.4.1-1 \
- && luarocks install lua-iconv 7-3 \
- && patch /etc/nginx/template/nginx.tmpl < /patches/nginx-tmpl.patch
+ && luarocks install lua-iconv 7-3
 
 USER www-data
 
 COPY --from=builder /src/rootfs/bin/amd64/nginx-ingress-controller /nginx-ingress-controller
+COPY --chown=www-data:www-data ./etc/nginx /etc/nginx
+
+LABEL org.opencontainers.image.source="https://github.com/cozystack/ingress-nginx-with-protobuf-exporter"
