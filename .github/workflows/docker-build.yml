@@ -11,36 +11,41 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Login to GitHub Container Registry
-      uses: docker/login-action@v2
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+    # The Go binaries cross-compile, but the controller's Lua rocks are C
+    # built on the target platform, so the arm64 leg needs emulation.
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      with:
+        platforms: arm64
 
-    - name: Extract tag from ref
-      id: extract_tag
-      run: echo "::set-output name=TAG::$(echo ${GITHUB_REF#refs/tags/})"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
     - name: Build and push Protobuf Exporter Docker image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: ./images/protobuf-exporter/
         file: ./images/protobuf-exporter/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
-        tags: ghcr.io/${{ github.repository }}/protobuf-exporter:${{ steps.extract_tag.outputs.TAG }}
+        tags: ghcr.io/${{ github.repository }}/protobuf-exporter:${{ github.ref_name }}
 
     - name: Build and push NGINX Ingress Controller Docker image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: ./images/controller/
         file: ./images/controller/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
-        tags: ghcr.io/${{ github.repository }}/controller:${{ steps.extract_tag.outputs.TAG }}
+        tags: ghcr.io/${{ github.repository }}/controller:${{ github.ref_name }}
         build-args: |
-          TAG=${{ steps.extract_tag.outputs.TAG }}
+          TAG=${{ github.ref_name }}

@@ -1,15 +1,26 @@
 ARG TAG
 
-FROM golang:1.24-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine as builder
+# The controller is pure Go with CGO off, so it cross-compiles on the build host
+# for every target; only the RUN steps on the upstream controller base run
+# emulated.
 ARG TAG=$TAG
-RUN apk add --no-cache git make bash
+ARG TARGETARCH
+RUN apk add --no-cache git
 RUN git clone --branch controller-${TAG} --depth 1 https://github.com/kubernetes/ingress-nginx /src
 WORKDIR /src
 COPY patches/* .
 RUN git apply *.diff
-RUN make build DOCKER_IN_DOCKER_ENABLED=true ARCH=amd64
+# This is the script `make build` ends up running. The make target is skipped
+# because on its way it installs ginkgo for ARCH and then looks it up on PATH,
+# which fails whenever ARCH is not the build host's architecture.
+RUN PKG=k8s.io/ingress-nginx ARCH=${TARGETARCH} TAG=${TAG} \
+    COMMIT_SHA=git-$(git rev-parse --short HEAD) \
+    REPO_INFO=$(git config --get remote.origin.url) \
+    build/build.sh
+RUN mv /src/rootfs/bin/${TARGETARCH}/nginx-ingress-controller /nginx-ingress-controller
 RUN apk add --no-cache libcap
-RUN setcap cap_net_bind_service+ep /src/rootfs/bin/amd64/nginx-ingress-controller
+RUN setcap cap_net_bind_service+ep /nginx-ingress-controller
 
 # lua-protobuf needs -fno-strict-aliasing. pb.c violates strict aliasing, gcc 13
 # did not act on it and gcc 14 at -O2 does, and the pb.so that comes out makes
@@ -68,7 +79,7 @@ COPY --from=rocks /usr/local/share/lua/5.1/protoc.lua /usr/local/share/lua/5.1/p
 # image that segfaults nginx's cache children in production.
 RUN luajit -e 'require "protoc"; require "iconv"'
 
-COPY --from=builder /src/rootfs/bin/amd64/nginx-ingress-controller /nginx-ingress-controller
+COPY --from=builder /nginx-ingress-controller /nginx-ingress-controller
 
 COPY --chown=www-data:www-data ./etc/nginx /etc/nginx
 
