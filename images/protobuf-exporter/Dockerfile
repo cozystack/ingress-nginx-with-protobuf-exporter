@@ -1,7 +1,8 @@
-FROM golang:1.24-alpine as artifact
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine as artifact
+ARG TARGETOS TARGETARCH
 WORKDIR /src/
 COPY / /src/
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-extldflags "-static" -s -w' -o ./protobuf_exporter ./main.go
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -ldflags='-extldflags "-static" -s -w' -o ./protobuf_exporter ./main.go
 
 FROM scratch
 COPY --from=artifact /src/protobuf_exporter /protobuf_exporter
