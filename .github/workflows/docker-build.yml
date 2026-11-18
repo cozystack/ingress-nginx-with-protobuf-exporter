@@ -27,6 +27,13 @@ jobs:
       with:
         platforms: arm64
 
+    # A tag is the upstream controller version, optionally followed by a
+    # suffix for a rebuild of that same version (v1.11.6-cozystack.1). The
+    # suffix names the image; the upstream version selects what is built.
+    - name: Resolve the upstream version
+      id: upstream
+      run: echo "tag=${GITHUB_REF_NAME%%-*}" >> "$GITHUB_OUTPUT"
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -48,4 +55,4 @@ jobs:
         push: true
         tags: ghcr.io/${{ github.repository }}/controller:${{ github.ref_name }}
         build-args: |
-          TAG=${{ github.ref_name }}
+          TAG=${{ steps.upstream.outputs.tag }}
