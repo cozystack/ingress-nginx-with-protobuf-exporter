@@ -28,6 +28,7 @@ BROTLI_COMMIT=$(sed -n 's/^git reset --hard \([0-9a-f]\{40\}\)$/\1/p' "$UPSTREAM
 # per-architecture flags (-m64 on x86_64, --with-file-aio off aarch64) and
 # names the module sources under $BUILD_PATH, which is where they go below.
 CONFIGURE_ARGS=$(nginx -V 2>&1 | sed -n 's/^configure arguments: //p')
+: "${CONFIGURE_ARGS:?shipped nginx reports no configure arguments}"
 SHIPPED_VERSION=$(nginx -v 2>&1 | sed -n 's|^nginx version: nginx/||p')
 if [[ "$SHIPPED_VERSION" != "$NGINX_VERSION" ]]; then
   echo "base image ships nginx $SHIPPED_VERSION, build.sh pins $NGINX_VERSION" >&2
@@ -39,10 +40,17 @@ cd "$BUILD_PATH"
 
 get_src() {
   mkdir "$BUILD_PATH/$2"
-  curl -fsSL "$1" | tar xz -C "$BUILD_PATH/$2" --strip-components=1
+  curl -fsSL -o "$BUILD_PATH/$2.tar.gz" "$1"
+  if [[ -n "${3:-}" ]]; then
+    echo "$3  $BUILD_PATH/$2.tar.gz" | sha256sum -c - >&2
+  fi
+  tar xzf "$BUILD_PATH/$2.tar.gz" -C "$BUILD_PATH/$2" --strip-components=1
+  rm "$BUILD_PATH/$2.tar.gz"
 }
 
-get_src "https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz" "nginx-$NGINX_VERSION"
+# nginx is the one source checked against a known hash: upstream's own check
+# is commented out because its pinned hash is stale.
+get_src "https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz" "nginx-$NGINX_VERSION" 2fe2294f8af4144e7e842eaea884182a84ee7970e11046ba98194400902bbec0
 get_src "https://github.com/vision5/ngx_devel_kit/archive/$NDK_VERSION.tar.gz" ngx_devel_kit
 get_src "https://github.com/openresty/set-misc-nginx-module/archive/$SETMISC_VERSION.tar.gz" set-misc-nginx-module
 get_src "https://github.com/openresty/headers-more-nginx-module/archive/$MORE_HEADERS_VERSION.tar.gz" headers-more-nginx-module
