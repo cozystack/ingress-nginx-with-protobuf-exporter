@@ -58,6 +58,37 @@ RUN cd /tmp \
  && luarocks install https://luarocks.org/manifests/xavier-wang/lua-protobuf-0.4.1-1.rockspec CFLAGS="-O2 -fPIC -fno-strict-aliasing" \
  && luarocks install https://luarocks.org/manifests/lunarmodules/lua-iconv-7.1.0-1.rockspec
 
+# nginx itself, rebuilt with security fixes the upstream image lacks.
+#
+# kubernetes/ingress-nginx is archived and will not publish another 1.11.x, so
+# the nginx 1.25.5 in its controller image stays as released. This stage
+# compiles that same nginx again, from upstream's own sources, patches, module
+# pins and configure line, with the backported fixes in nginx/patches applied
+# last, and the binary replaces the shipped one below. Everything else in the
+# image is upstream's, byte for byte. nginx/build.sh has the details.
+#
+# It runs on the upstream controller image so the binary links against the
+# LuaJIT and libmodsecurity that image already carries. The -dev packages
+# installed here may move musl and OpenSSL forward by a patch release within
+# Alpine 3.21; that stays in this stage, and both keep their ABI across patch
+# releases.
+FROM registry.k8s.io/ingress-nginx/controller:$TAG as nginx
+
+USER root
+
+RUN apk add --no-cache bash curl git patch gcc make musl-dev linux-headers \
+      openssl-dev pcre-dev zlib-dev libmaxminddb-dev libcap
+
+COPY --from=builder /src/images/nginx/rootfs/build.sh /upstream/build.sh
+COPY --from=builder /src/images/nginx/rootfs/patches /upstream/patches
+COPY nginx/patches /extra-patches
+COPY nginx/build.sh /build-nginx.sh
+
+RUN /build-nginx.sh /upstream /extra-patches \
+ && chown www-data:www-data /nginx \
+ && setcap cap_net_bind_service=+ep /nginx \
+ && setcap -v cap_net_bind_service=+ep /nginx
+
 FROM registry.k8s.io/ingress-nginx/controller:$TAG
 
 USER root
@@ -80,6 +111,12 @@ COPY --from=rocks /usr/local/share/lua/5.1/protoc.lua /usr/local/share/lua/5.1/p
 RUN luajit -e 'require "protoc"; require "iconv"'
 
 COPY --from=builder /nginx-ingress-controller /nginx-ingress-controller
+
+# /usr/bin/nginx is a symlink to this path, so both pick up the rebuilt binary.
+COPY --from=nginx /nginx /usr/local/nginx/sbin/nginx
+
+# Fails the build if the rebuilt binary cannot start on this image.
+RUN nginx -V
 
 COPY --chown=www-data:www-data ./etc/nginx /etc/nginx
 
