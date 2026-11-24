@@ -14,7 +14,7 @@ This build of the NGINX Ingress controller is built with:
 
 Reproducing the binary rather than reinventing it is the point, so [`nginx/build.sh`](./nginx/build.sh) takes every input from upstream at the same controller tag: the module versions from `images/nginx/rootfs/build.sh`, the OpenResty patch set from `images/nginx/rootfs/patches`, and the configure line from `nginx -V` of the shipped binary itself, which already carries the per-architecture flags. It runs on the upstream controller image, so the binary links against the LuaJIT and libmodsecurity already there, and the build fails if the configure arguments of the result differ from the shipped ones. Only the binary is rebuilt: the dynamic modules in the image are untouched by the patches and stay loadable through `--with-compat`.
 
-The patches in `nginx/patches` are applied after upstream's, and each is the upstream nginx commit unchanged, taken from the 1.30 stable branch:
+The patches in `nginx/patches` are applied after upstream's:
 
 | Patch | nginx commit | Fixes |
 | --- | --- | --- |
