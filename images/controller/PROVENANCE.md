@@ -20,10 +20,16 @@ The patches in `nginx/patches` are applied after upstream's, and each is the ups
 | --- | --- | --- |
 | `32_nginx-1.25.5-http2-reusable-connection-stream.patch` | [`0c87dd1d`](https://github.com/nginx/nginx/commit/0c87dd1db413e440a4e3ef7ee8acc518509e8809) | CVE-2026-123633, HTTP/2 use-after-free when `worker_connections` run out |
 | `33_nginx-1.25.5-http2-window-update-queued.patch` | [`b89c4100`](https://github.com/nginx/nginx/commit/b89c4100bf6762a45e4a6463eaf4b70368277c94) | CVE-2026-123007, HTTP/2 flow control window overflow |
+| `34_nginx-1.25.5-request-body-again.patch` | [`1b723277`](https://github.com/nginx/nginx/commit/1b723277aa556ba4c6e40cc8f0f0b465e29c0a13) | CVE-2026-118899, endless loop while reading a request body over SSL |
+| `35_nginx-1.25.5-http3-request-body-again.patch` | [`d1640655`](https://github.com/nginx/nginx/commit/d1640655f46c5a2d32fefc2c818583f203e47536) | CVE-2026-118899, the same for HTTP/3 |
+| `36_nginx-1.25.5-resolver-cname-restart-failure.patch` | [`338f6231`](https://github.com/nginx/nginx/commit/338f6231e347c17a07c381802b1bc3c20c55b529) | CVE-2026-123634, resolver use-after-free, with the next patch |
+| `37_nginx-1.25.5-resolver-non-current-finalization.patch` | [`7426c29f`](https://github.com/nginx/nginx/commit/7426c29f140c330dd6c6cdfeb2943be1978c69e0) | CVE-2026-123634, resolver use-after-free |
+| `38_nginx-1.25.5-quic-main-connection-reuse.patch` | [`c58d2a22`](https://github.com/nginx/nginx/commit/c58d2a22d12350766185c94f2245bf4be5bcfb7d) | CVE-2026-121810, HTTP/3 use-after-free when `worker_connections` run out |
+| `39_nginx-1.25.5-try-files-script-underwrite.patch` | [`b99b6b52`](https://github.com/nginx/nginx/commit/b99b6b528b64e93354b5c3453e45701e70c461a8) | CVE-2026-125283, buffer overflow with `try_files` and `alias` |
 
-Both were released in nginx 1.30.7 and 1.31.9. They apply to 1.25.5 without fuzz, only at line offsets: the code they change has not moved since, and the condition behind CVE-2026-123633 dates from nginx 1.19.7. `nginx -V` still reports 1.25.5, since that is the code base; the image tag carries the rebuild suffix instead.
+All were released in nginx 1.30.7 and 1.31.9. Patches 34-39 apply in the order of the stable branch, after 32 and 33 from the first rebuild (on stable-1.30, 33 comes after 37, but it touches only HTTP/2 files), all at line offsets. Patch 39 alone needs fuzz 1: 1.25.5 lacks the `ngx_http_script_check_length` block that nginx 1.30.4 added next to it in 326b17b0, so it fixes the underwrite case only, without the overrun protection that commit brought. The condition behind CVE-2026-123633 dates from nginx 1.19.7. The other fixes of 1.30.7 are left out: the mail module is not built, and the controller's template uses neither SSL in the stream module nor `ssl_preread`. `nginx -V` still reports 1.25.5, since that is the code base; the image tag carries the rebuild suffix instead.
 
-Image tags are the upstream controller version, with a `-cozystack.N` suffix for a rebuild of that version: `v1.11.6-cozystack.1` is upstream v1.11.6 with the nginx above. The workflow strips the suffix to pick what it builds.
+Image tags are the upstream controller version, with a `-cozystack.N` suffix for a rebuild of that version: `v1.11.6-cozystack.1` is upstream v1.11.6 with patches 32 and 33, `v1.11.6-cozystack.2` with all of the above. The workflow strips the suffix to pick what it builds.
 
 ## Notes on the 1.11.2 → 1.11.5 move
 
