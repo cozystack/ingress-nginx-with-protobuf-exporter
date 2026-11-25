@@ -1,0 +1,51 @@
+From 32c3957216a69e7d047f9bfb790ef5b00b6d4984 Mon Sep 17 00:00:00 2001
+From: Roman Arutyunyan <arut@nginx.com>
+Date: Tue, 17 Nov 2026 23:44:39 +0400
+Subject: [PATCH] Core: avoid repeating send_chain() when it sent nothing
+
+Previously, ngx_chain_writer() re-posted the write event to continue
+a capped send whenever output data remained and c->write->ready was
+still set.  This was wrong when c->send_chain() returned without
+sending anything while the write event still looked ready, notably
+when SSL_write() returned SSL_ERROR_WANT_READ.  The event was then
+re-posted on every event loop iteration, busy-looping the worker at
+100% CPU.
+
+The re-post was introduced without a progress check in b3b368184
+(1.21.4).  A check is now added by requiring that c->send_chain()
+advanced c->sent.
+---
+ src/core/ngx_output_chain.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/core/ngx_output_chain.c b/src/core/ngx_output_chain.c
+index eb467e06a8..b3a623e1c0 100644
+--- a/src/core/ngx_output_chain.c
++++ b/src/core/ngx_output_chain.c
+@@ -670,7 +670,7 @@ ngx_chain_writer(void *data, ngx_chain_t *in)
+ {
+     ngx_chain_writer_ctx_t *ctx = data;
+ 
+-    off_t              size;
++    off_t              size, sent;
+     ngx_chain_t       *cl, *ln, *chain;
+     ngx_connection_t  *c;
+ 
+@@ -787,6 +787,8 @@ ngx_chain_writer(void *data, ngx_chain_t *in)
+         return NGX_OK;
+     }
+ 
++    sent = c->sent;
++
+     chain = c->send_chain(c, ctx->out, ctx->limit);
+ 
+     ngx_log_debug1(NGX_LOG_DEBUG_CORE, c->log, 0,
+@@ -796,7 +798,7 @@ ngx_chain_writer(void *data, ngx_chain_t *in)
+         return NGX_ERROR;
+     }
+ 
+-    if (chain && c->write->ready) {
++    if (chain && c->write->ready && c->sent != sent) {
+         ngx_post_event(c->write, &ngx_posted_next_events);
+     }
+ 
