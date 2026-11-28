@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine as artifact
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS artifact
 ARG TARGETOS TARGETARCH
 WORKDIR /src/
 COPY / /src/
