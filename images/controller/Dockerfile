@@ -42,21 +42,39 @@ FROM registry.k8s.io/ingress-nginx/controller:$TAG as rocks
 USER root
 
 # required packages to build lua and run luarocks. git is needed because the
-# rockspecs below fetch their sources from git rather than a source tarball.
+# rock sources below are fetched from git rather than a source tarball.
 RUN apk add --no-cache make gcc musl-dev git
 
+# What this stage builds is loaded by nginx, so its sources are pinned: the
+# luarocks tarball by sha256, each rock's source by commit. The rockspecs in
+# rocks/ are the ones published on luarocks.org, and they name their sources by
+# git tag, which can be moved. So each source is checked out at a fixed commit
+# instead, and `luarocks make` builds the rockspec from that checkout without
+# fetching anything.
 ARG LUA_ROCKS_VER="3.0.0"
+ARG LUA_ROCKS_SHA256="a43fffb997100f11cccb529a3db5456ce8dab18171a5cb3645f948147b6f64a1"
+# The commits of lua-protobuf tag 0.4.1 and lua-iconv tag v7.1.0.
+ARG LUA_PROTOBUF_COMMIT="2a2b0b95117642ad9470bfe0add7dd6ce82f3869"
+ARG LUA_ICONV_COMMIT="dbdd9d9ab8620de87ab19d7084d553302660a321"
+COPY rocks /rocks
 RUN cd /tmp \
  && wget https://luarocks.org/releases/luarocks-${LUA_ROCKS_VER}.tar.gz \
+ && echo "${LUA_ROCKS_SHA256}  luarocks-${LUA_ROCKS_VER}.tar.gz" | sha256sum -c - \
  && tar zxf luarocks-${LUA_ROCKS_VER}.tar.gz \
  && cd luarocks-${LUA_ROCKS_VER} \
  && ./configure \
  && make build \
  && make install \
- && cd /tmp \
- && rm -rf /tmp/* \
- && luarocks install https://luarocks.org/manifests/xavier-wang/lua-protobuf-0.4.1-1.rockspec CFLAGS="-O2 -fPIC -fno-strict-aliasing" \
- && luarocks install https://luarocks.org/manifests/lunarmodules/lua-iconv-7.1.0-1.rockspec
+ && git clone --quiet https://github.com/starwing/lua-protobuf.git /tmp/lua-protobuf \
+ && git -C /tmp/lua-protobuf checkout --quiet ${LUA_PROTOBUF_COMMIT} \
+ && cd /tmp/lua-protobuf \
+ && luarocks make /rocks/lua-protobuf-0.4.1-1.rockspec CFLAGS="-O2 -fPIC -fno-strict-aliasing" \
+ && git clone --quiet https://github.com/lunarmodules/lua-iconv.git /tmp/lua-iconv \
+ && git -C /tmp/lua-iconv checkout --quiet ${LUA_ICONV_COMMIT} \
+ && cd /tmp/lua-iconv \
+ && luarocks make /rocks/lua-iconv-7.1.0-1.rockspec \
+ && cd / \
+ && rm -rf /tmp/*
 
 # nginx itself, rebuilt with security fixes the upstream image lacks.
 #
