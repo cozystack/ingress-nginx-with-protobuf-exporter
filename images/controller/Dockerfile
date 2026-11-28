@@ -1,10 +1,10 @@
-ARG TAG
+ARG TAG=v1.11.6
 
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 # The controller is pure Go with CGO off, so it cross-compiles on the build host
 # for every target; only the RUN steps on the upstream controller base run
 # emulated.
-ARG TAG=$TAG
+ARG TAG
 ARG TARGETARCH
 RUN apk add --no-cache git
 RUN git clone --branch controller-${TAG} --depth 1 https://github.com/kubernetes/ingress-nginx /src
@@ -37,7 +37,7 @@ RUN setcap cap_net_bind_service+ep /nginx-ingress-controller
 # LuaJIT and musl they compile against are identical by construction. It also
 # keeps apk out of the runtime image, where installing musl-dev upgrades musl
 # underneath the nginx that base image already built.
-FROM registry.k8s.io/ingress-nginx/controller:$TAG as rocks
+FROM registry.k8s.io/ingress-nginx/controller:$TAG AS rocks
 
 USER root
 
@@ -72,7 +72,7 @@ RUN cd /tmp \
 # installed here may move musl and OpenSSL forward by a patch release within
 # Alpine 3.21; that stays in this stage, and both keep their ABI across patch
 # releases.
-FROM registry.k8s.io/ingress-nginx/controller:$TAG as nginx
+FROM registry.k8s.io/ingress-nginx/controller:$TAG AS nginx
 
 USER root
 
